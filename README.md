@@ -3,6 +3,7 @@
 Ask Claude about your Tesla. A read-only MCP server over Tesla's official Fleet API, built so an AI client can answer "what's my battery?" without ever being able to send a command to the car.
 
 **Status:** Phase 1 (read-only) live since 2026-10-12, running against a real vehicle.
+**Project page:** https://toneeraj.github.io/tesla-fleet-mcp/
 **Full design write-up:** https://claude.ai/code/artifact/91137cdf-1812-4e6a-8c5c-69acbea7a126
 
 ## What it does
@@ -40,7 +41,7 @@ The core refreshes tokens, records spend, applies the wake guard, and returns ab
 ### One-time Tesla setup
 
 1. Generate an EC `prime256v1` key pair in `~/.tesla-fleet/` (never in this repo).
-2. Host the public key at `https://<your-domain>/.well-known/appspecific/com.tesla.3p.public-key.pem`. On GitHub Pages, add an empty `.nojekyll` file at the site root.
+2. Host the public key at `https://<your-domain>/.well-known/appspecific/com.tesla.3p.public-key.pem`. On GitHub Pages, add `.well-known` to the `include:` list in `_config.yml` so Jekyll serves the folder.
 3. Create a developer app at https://developer.tesla.com with:
    - allowed origin: your domain
    - redirect URI: `http://localhost:8080/callback`
