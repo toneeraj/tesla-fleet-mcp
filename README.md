@@ -44,7 +44,7 @@ The core refreshes tokens, records spend, applies the wake guard, and returns ab
 3. Create a developer app at https://developer.tesla.com with:
    - allowed origin: your domain
    - redirect URI: `http://localhost:8080/callback`
-   - read scopes for vehicle information and charging
+   - scopes: Vehicle Information, Vehicle Location, Vehicle Charging Management (nothing else)
 4. Put the credentials in `~/.tesla-fleet/.env`:
 
    ```

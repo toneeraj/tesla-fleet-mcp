@@ -19,7 +19,7 @@ API_BASES = {
 REDIRECT_URI = "http://localhost:8080/callback"
 
 # Read-only scopes. offline_access is what makes Tesla issue a refresh token.
-USER_SCOPES = "openid offline_access vehicle_device_data vehicle_charging_cmds"
+USER_SCOPES = "openid offline_access vehicle_device_data vehicle_location vehicle_charging_cmds"
 PARTNER_SCOPES = "openid vehicle_device_data vehicle_charging_cmds"
 
 # Spend estimates only (USD). Check Tesla's current pricing page; these are
