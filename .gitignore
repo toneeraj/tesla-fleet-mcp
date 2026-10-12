@@ -1,0 +1,14 @@
+# Secrets: these belong in ~/.tesla-fleet/, never here
+.env
+*.pem
+tokens.json
+ledger.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
