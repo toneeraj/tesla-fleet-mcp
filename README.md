@@ -2,7 +2,7 @@
 
 Ask Claude about your Tesla. A read-only MCP server over Tesla's official Fleet API, built so an AI client can answer "what's my battery?" without ever being able to send a command to the car.
 
-**Status:** Phase 1 (read-only) in progress.
+**Status:** Phase 1 (read-only) live since 2026-10-12, running against a real vehicle.
 **Full design write-up:** https://claude.ai/code/artifact/91137cdf-1812-4e6a-8c5c-69acbea7a126
 
 ## What it does
@@ -98,7 +98,7 @@ tests/                 # pytest, mocked HTTP; no live Tesla calls
 
 ## Roadmap
 
-1. **Phase 1:** read-only, one client (Claude Code). *Current.*
+1. **Phase 1:** read-only, one client (Claude Code). *Live.*
 2. **Phase 2:** a few signed commands (lock, climate), each requiring confirmation, after virtual key pairing.
 3. **Phase 3:** a hosted MCP server that owns the tokens and serves a second client.
 
