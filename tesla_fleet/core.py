@@ -16,7 +16,9 @@ import json
 import os
 import time
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -24,9 +26,11 @@ import httpx
 
 from .config import (
     AUTH_BASE,
+    CAP_TIMEZONE,
     COST_PER_DATA_REQUEST,
     COST_PER_WAKE,
     MONTHLY_CREDIT_USD,
+    Limits,
     Settings,
     load_settings,
 )
@@ -34,6 +38,15 @@ from .config import (
 WAKE_RETRIES = 6
 WAKE_RETRY_SECONDS = 5.0
 REFRESH_MARGIN_SECONDS = 60
+DAYS_KEPT = 35
+
+# Who is asking. The hosted server sets this per call; local stdio use is "local".
+current_client: ContextVar[str] = ContextVar("current_client", default="local")
+# Clients driven by a person in the loop. Anything else (Muse, unknown) is treated
+# as acting on its own and gets the tighter wake budget.
+TRUSTED_CLIENTS = frozenset({"local", "claude-code", "claude.ai"})
+# Per-call record of what was sent to Tesla, read by the audit log.
+call_requests: ContextVar[list[str] | None] = ContextVar("call_requests", default=None)
 
 
 class FleetError(Exception):
@@ -49,6 +62,10 @@ class LoginRequired(FleetError):
 
 class VehicleUnavailable(FleetError):
     pass
+
+
+class CapReached(FleetError):
+    """A hard cap stopped a request before it was sent to Tesla."""
 
 
 @contextmanager
@@ -123,26 +140,79 @@ class TokenStore:
 
 
 class Ledger:
-    """Counts Fleet API requests per month for spend estimates."""
+    """Counts Fleet API requests and enforces hard caps before they are sent."""
 
-    def __init__(self, settings: Settings, clock: Callable[[], float] = time.time) -> None:
+    def __init__(self, settings: Settings, clock: Callable[[], float] = time.time, limits: Limits | None = None) -> None:
         self.settings = settings
         self.clock = clock
+        self.limits = limits or Limits.from_env()
 
     def _month(self) -> str:
         return datetime.fromtimestamp(self.clock(), tz=timezone.utc).strftime("%Y-%m")
 
+    def _day(self) -> str:
+        return datetime.fromtimestamp(self.clock(), tz=ZoneInfo(CAP_TIMEZONE)).strftime("%Y-%m-%d")
+
+    @staticmethod
+    def _spend(month: dict[str, Any]) -> float:
+        return month.get("data", 0) * COST_PER_DATA_REQUEST + month.get("wake", 0) * COST_PER_WAKE
+
+    def _check(self, kind: str, month: dict[str, Any], day: dict[str, Any], client: str) -> None:
+        caps = self.limits
+        midnight = "Resets at midnight Eastern."
+        if kind in ("data", "wake"):
+            next_cost = COST_PER_WAKE if kind == "wake" else COST_PER_DATA_REQUEST
+            spend = self._spend(month)
+            if spend + next_cost > caps.monthly_ceiling_usd:
+                raise CapReached(
+                    f"Monthly spend ceiling reached: estimated ${spend:.2f} of ${caps.monthly_ceiling_usd:.2f}. "
+                    "Resets on the 1st."
+                )
+        if kind == "data" and day.get("data", 0) >= caps.requests_per_day:
+            raise CapReached(f"Daily request cap reached: {day['data']} of {caps.requests_per_day}. {midnight}")
+        if kind == "wake":
+            if day.get("wake", 0) >= caps.wakes_per_day:
+                raise CapReached(f"Daily wake cap reached: {day['wake']} of {caps.wakes_per_day}. {midnight}")
+            if client not in TRUSTED_CLIENTS:
+                used = day.get("wake_by_client", {}).get(client, 0)
+                if used >= caps.untrusted_client_wakes_per_day:
+                    raise CapReached(
+                        f"Wake cap for {client} reached: {used} of {caps.untrusted_client_wakes_per_day}. {midnight}"
+                    )
+        if kind == "location" and day.get("location", 0) >= caps.location_reads_per_day:
+            raise CapReached(
+                f"Daily location cap reached: {day['location']} of {caps.location_reads_per_day}. {midnight}"
+            )
+
     def record(self, kind: str) -> None:
+        """Check every cap for one more `kind`, then count it. Raises CapReached instead of counting."""
+        client = current_client.get()
         with file_lock(self.settings.lock_path.with_name(".ledger.lock")):
             ledger = _read_json(self.settings.ledger_path)
             month = ledger.setdefault(self._month(), {"data": 0, "wake": 0})
-            month[kind] = month.get(kind, 0) + 1
+            days = ledger.setdefault("days", {})
+            day = days.setdefault(self._day(), {})
+            self._check(kind, month, day, client)
+            if kind in ("data", "wake"):
+                month[kind] = month.get(kind, 0) + 1
+            day[kind] = day.get(kind, 0) + 1
+            if kind == "wake":
+                by_client = day.setdefault("wake_by_client", {})
+                by_client[client] = by_client.get(client, 0) + 1
+            for old in sorted(days)[:-DAYS_KEPT]:
+                del days[old]
             _write_private_json(self.settings.ledger_path, ledger)
+        tracked = call_requests.get()
+        if tracked is not None and kind in ("data", "wake"):
+            tracked.append(kind)
 
     def summary(self, month: str | None = None) -> dict[str, Any]:
         month = month or self._month()
-        counts = _read_json(self.settings.ledger_path).get(month, {"data": 0, "wake": 0})
-        spend = counts.get("data", 0) * COST_PER_DATA_REQUEST + counts.get("wake", 0) * COST_PER_WAKE
+        ledger = _read_json(self.settings.ledger_path)
+        counts = ledger.get(month, {"data": 0, "wake": 0})
+        spend = self._spend(counts)
+        today = ledger.get("days", {}).get(self._day(), {})
+        caps = self.limits
         return {
             "month": month,
             "data_requests": counts.get("data", 0),
@@ -150,7 +220,13 @@ class Ledger:
             "estimated_spend_usd": round(spend, 4),
             "monthly_credit_usd": MONTHLY_CREDIT_USD,
             "estimated_credit_left_usd": round(MONTHLY_CREDIT_USD - spend, 4),
-            "note": "Estimate from this machine's own ledger, using published per-request prices.",
+            "monthly_ceiling_usd": caps.monthly_ceiling_usd,
+            "today": {
+                "requests": f"{today.get('data', 0)} of {caps.requests_per_day}",
+                "wakes": f"{today.get('wake', 0)} of {caps.wakes_per_day}",
+                "location_reads": f"{today.get('location', 0)} of {caps.location_reads_per_day}",
+            },
+            "note": "Estimate from this server's own ledger, using published per-request prices.",
         }
 
 
@@ -258,6 +334,8 @@ class FleetClient:
         vehicles = {v["vin"]: v for v in self.list_vehicles()}
         if vin not in vehicles:
             raise FleetError(f"No vehicle with VIN {vin} on this account.")
+        if include_location:
+            self.ledger.record("location")
         state = vehicles[vin]["state"]
         if state != "online":
             if not wake:

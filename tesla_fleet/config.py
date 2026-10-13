@@ -28,6 +28,38 @@ COST_PER_DATA_REQUEST = 0.002  # $1 per 500 data requests
 COST_PER_WAKE = 0.02  # $1 per 50 wakes
 MONTHLY_CREDIT_USD = 10.0
 
+# Daily caps reset at midnight in this zone.
+CAP_TIMEZONE = "America/New_York"
+
+
+@dataclass(frozen=True)
+class Limits:
+    """Hard caps. Values, not logic: tune them via environment variables."""
+
+    wakes_per_day: int = 5
+    requests_per_day: int = 100
+    monthly_ceiling_usd: float = 8.0
+    location_reads_per_day: int = 10
+    calls_per_minute: int = 10
+    # Clients that act on their own (Muse, anything unrecognized) get fewer wakes.
+    untrusted_client_wakes_per_day: int = 2
+
+    @classmethod
+    def from_env(cls) -> "Limits":
+        def num(key: str, default: float, cast: type) -> float:
+            raw = os.environ.get(key)
+            return cast(raw) if raw else default
+
+        d = cls()
+        return cls(
+            wakes_per_day=num("CAP_WAKES_PER_DAY", d.wakes_per_day, int),
+            requests_per_day=num("CAP_REQUESTS_PER_DAY", d.requests_per_day, int),
+            monthly_ceiling_usd=num("CAP_MONTHLY_CEILING_USD", d.monthly_ceiling_usd, float),
+            location_reads_per_day=num("CAP_LOCATION_PER_DAY", d.location_reads_per_day, int),
+            calls_per_minute=num("CAP_CALLS_PER_MINUTE", d.calls_per_minute, int),
+            untrusted_client_wakes_per_day=num("CAP_UNTRUSTED_WAKES_PER_DAY", d.untrusted_client_wakes_per_day, int),
+        )
+
 
 class ConfigError(Exception):
     """Raised when required local configuration is missing."""

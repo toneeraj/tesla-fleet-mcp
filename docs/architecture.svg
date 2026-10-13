@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 590" width="760" height="590" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="tesla-fleet-mcp hosted architecture">
+  <title>tesla-fleet-mcp hosted architecture</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#6B7684"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="760" height="590" rx="14" fill="#FFFFFF"/>
+  <text x="32" y="44" font-size="19" font-weight="600" fill="#18212D">Every client meets the same gate; only the core talks to Tesla</text>
+  <text x="32" y="68" font-size="13" fill="#5B6777">Read-only MCP server over Tesla's Fleet API, hosted so Claude Code, claude.ai and Muse can all reach it</text>
+
+  <g font-size="14" text-anchor="middle">
+    <rect x="32" y="96" width="170" height="58" rx="9" fill="#EEEDFE" stroke="#534AB7"/>
+    <text x="117" y="120" font-weight="600" fill="#26215C">Claude Code</text>
+    <text x="117" y="140" font-size="12" fill="#534AB7">laptop · trusted</text>
+    <rect x="222" y="96" width="170" height="58" rx="9" fill="#EEEDFE" stroke="#534AB7"/>
+    <text x="307" y="120" font-weight="600" fill="#26215C">claude.ai</text>
+    <text x="307" y="140" font-size="12" fill="#534AB7">web and phone · trusted</text>
+    <rect x="412" y="96" width="170" height="58" rx="9" fill="#EEEDFE" stroke="#534AB7"/>
+    <text x="497" y="120" font-weight="600" fill="#26215C">Muse</text>
+    <text x="497" y="140" font-size="12" fill="#534AB7">autonomous · tighter caps</text>
+  </g>
+  <text x="602" y="130" font-size="12" fill="#5B6777">HTTPS + OAuth</text>
+
+  <rect x="32" y="178" width="550" height="290" rx="16" fill="none" stroke="#9AA5B1" stroke-dasharray="6 5"/>
+
+  <g font-size="14">
+    <rect x="62" y="216" width="490" height="62" rx="9" fill="#FAECE7" stroke="#993C1D"/>
+    <text x="80" y="240" font-weight="600" fill="#4A1B0C">1  Auth gate</text>
+    <text x="80" y="262" font-size="12.5" fill="#712B13">GitHub sign-in, then an allowlist: any other account is refused at the handshake</text>
+
+    <rect x="62" y="296" width="490" height="62" rx="9" fill="#FAECE7" stroke="#993C1D"/>
+    <text x="80" y="320" font-weight="600" fill="#4A1B0C">2  Call guard</text>
+    <text x="80" y="342" font-size="12.5" fill="#712B13">Names the client, 10 calls a minute, audit log of every call and refusal</text>
+
+    <rect x="62" y="376" width="170" height="74" rx="9" fill="#E1F5EE" stroke="#0F6E56"/>
+    <text x="78" y="400" font-weight="600" fill="#04342C">Volume</text>
+    <text x="78" y="420" font-size="12.5" fill="#085041">tokens · ledger</text>
+    <text x="78" y="438" font-size="12.5" fill="#085041">audit log · OAuth state</text>
+
+    <rect x="252" y="376" width="300" height="74" rx="9" fill="#E1F5EE" stroke="#0F6E56"/>
+    <text x="270" y="400" font-weight="600" fill="#04342C">3  tesla_fleet core</text>
+    <text x="270" y="420" font-size="12.5" fill="#085041">4 read-only tools · wake guard</text>
+    <text x="270" y="438" font-size="12.5" fill="#085041">caps checked before any request</text>
+
+    <rect x="612" y="216" width="124" height="62" rx="9" fill="#F7F9FB" stroke="#9AA5B1"/>
+    <text x="674" y="242" text-anchor="middle" font-weight="600" fill="#18212D">GitHub</text>
+    <text x="674" y="262" text-anchor="middle" font-size="12" fill="#5B6777">proves identity</text>
+
+    <rect x="612" y="376" width="124" height="74" rx="9" fill="#F7F9FB" stroke="#9AA5B1"/>
+    <text x="674" y="400" text-anchor="middle" font-size="13.5" font-weight="600" fill="#18212D">Tesla Fleet API</text>
+    <text x="674" y="420" text-anchor="middle" font-size="12" fill="#5B6777">official, metered</text>
+    <text x="674" y="438" text-anchor="middle" font-size="12" fill="#5B6777">$10 billing cap</text>
+  </g>
+
+  <g stroke="#6B7684" stroke-width="1.4" fill="none">
+    <path d="M117 154V214" marker-end="url(#a)"/>
+    <path d="M307 154V214" marker-end="url(#a)"/>
+    <path d="M497 154V214" marker-end="url(#a)"/>
+    <path d="M307 278V294" marker-end="url(#a)"/>
+    <path d="M402 358V374" marker-end="url(#a)"/>
+    <path d="M252 413H234" marker-end="url(#a)"/>
+    <path d="M552 247H610" marker-end="url(#a)"/>
+    <path d="M552 413H610" marker-end="url(#a)"/>
+  </g>
+
+  <g font-size="12.5" fill="#5B6777">
+    <text x="32" y="494">Dashed box: the hosted server. One machine and one volume, so there is one owner of the Tesla login.</text>
+    <text x="32" y="522">Caps per day: 5 wakes (2 for untrusted clients), 100 requests, 10 location reads. $8 monthly ceiling.</text>
+    <text x="32" y="550">Never on the server: the Tesla client secret, the private key, car data in logs, any command tool.</text>
+  </g>
+</svg>
