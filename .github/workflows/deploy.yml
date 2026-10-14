@@ -65,11 +65,11 @@ jobs:
       - name: Create app and volume if missing
         run: |
           set -euo pipefail
-          if ! fly apps list --json | jq -e --arg a "$APP" '.[] | select((.Name // .name) == $a)' > /dev/null; then
-            fly apps create "$APP"
+          if ! flyctl apps list --json | jq -e --arg a "$APP" '.[] | select((.Name // .name) == $a)' > /dev/null; then
+            flyctl apps create "$APP"
           fi
-          if ! fly volumes list -a "$APP" --json | jq -e 'length > 0' > /dev/null; then
-            fly volumes create tesla_data -a "$APP" --region "$REGION" --size 1 --yes
+          if ! flyctl volumes list -a "$APP" --json | jq -e 'length > 0' > /dev/null; then
+            flyctl volumes create tesla_data -a "$APP" --region "$REGION" --size 1 --yes
           fi
 
       - name: Stage secrets
@@ -78,7 +78,7 @@ jobs:
           set -euo pipefail
           args=(GITHUB_CLIENT_ID="$OAUTH_CLIENT_ID" GITHUB_CLIENT_SECRET="$OAUTH_CLIENT_SECRET" TESLA_CLIENT_ID="$TESLA_CLIENT_ID")
           # The signing key is generated once on Fly and never leaves it.
-          if ! fly secrets list -a "$APP" --json | jq -e '.[] | select((.Name // .name) == "JWT_SIGNING_KEY")' > /dev/null; then
+          if ! flyctl secrets list -a "$APP" --json | jq -e '.[] | select((.Name // .name) == "JWT_SIGNING_KEY")' > /dev/null; then
             args+=(JWT_SIGNING_KEY="$(openssl rand -base64 48)")
           fi
           # One-time seed of the Tesla login. The server ignores it if it already holds tokens.
@@ -87,11 +87,11 @@ jobs:
             args+=(TESLA_BOOTSTRAP_TOKENS="$TESLA_TOKENS_JSON")
             seeded=true
           fi
-          fly secrets set -a "$APP" --stage "${args[@]}" > /dev/null
+          flyctl secrets set -a "$APP" --stage "${args[@]}" > /dev/null
           echo "seeded=$seeded" >> "$GITHUB_OUTPUT"
 
       - name: Deploy
-        run: fly deploy -a "$APP" --remote-only --ha=false
+        run: flyctl deploy -a "$APP" --remote-only --ha=false
 
       - name: Health check
         run: |
@@ -103,4 +103,4 @@ jobs:
 
       - name: Remove the one-time token seed from Fly
         if: steps.secrets.outputs.seeded == 'true'
-        run: fly secrets unset -a "$APP" TESLA_BOOTSTRAP_TOKENS > /dev/null
+        run: flyctl secrets unset -a "$APP" TESLA_BOOTSTRAP_TOKENS > /dev/null
