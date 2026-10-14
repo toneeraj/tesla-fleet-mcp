@@ -44,7 +44,7 @@ All routine tasks run from a browser. Nothing below needs a local machine except
 
 Fly has no spending cap. Two controls bound the bill:
 
-1. Pay Fly with a card number that has its own monthly limit. A card's spending limit for the account holder, or a per-purchase limit, does not cap a monthly bill.
+1. Pay Fly with a card number you can replace on its own and that notifies you of every charge, such as a virtual card number. If a charge looks wrong, or the provider is breached, replace that number; the account and the physical card keep working. If the card issuer lets you set a monthly limit on that number, set it. A per-purchase limit does not cap a monthly bill.
 2. Scope the deploy token to this app:
     1. Fly dashboard → app `tesla-fleet-mcp-toneeraj` → **Tokens** → create a deploy token with a one-year expiry.
     2. Replace the value of `fly-api-token` in the `tesla-fleet` vault with it.
