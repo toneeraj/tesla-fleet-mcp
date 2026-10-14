@@ -57,6 +57,10 @@ To change a usage cap, set its environment variable in the `[env]` block of `fly
 
 **Verify:** Deploy and Diagnose are green on the scoped token; `get_api_spend` reports the caps under `today`.
 
+## Know what auto-sleep changes
+
+The machine stops after a few idle minutes and starts on the next request, so compute is billed only while it answers; the 1 GB volume is billed regardless. The first call after a quiet spell takes a few seconds longer. Daily caps, the ledger, the audit log and the Tesla login survive every sleep because they live on the volume; the per-minute rate limit resets because it lives in memory. To keep the machine always on, set `auto_stop_machines = "off"` and `min_machines_running = 1` in `fly.toml` and run **Deploy**.
+
 ## Revoke all access in an emergency
 
 1. Tesla account → Third-party apps → remove **My Fleet Assistant**. This kills the server's Tesla login.
@@ -72,6 +76,7 @@ To change a usage cap, set its environment variable in the `[env]` block of `fly
 | Deploy step fails with exit code 127 | A command name not installed on the runner | Check the step log for the missing command |
 | A tool returns `Tesla login required` | The Tesla refresh token expired, usually after about three months unused | On a laptop with the repository: run `python -m tesla_fleet.login`, then `flyctl ssh console -a tesla-fleet-mcp-toneeraj -C "rm /data/tesla/tokens.json"`, save the new `tokens.json` as a one-line `tesla-tokens-seed` item in the vault, run Deploy, then delete the item and the local file |
 | A client shows "registered but holds no credential" | The client never opened the server's authorize page | Run Diagnose; if no newer authorize request appears after the client's registration, the fault is in the client's sign-in flow |
+| The first call after idle times out | The machine was waking | Ask again; the second call reaches a running machine |
 | A tool returns a cap message | A daily or monthly cap was reached | Wait for the reset in the message, or raise the cap per *Tighten spend limits* |
 | Diagnose shows an address or token unredacted | The redaction missed a format | Delete the run (Actions → Diagnose → the run's **⋯** → Delete workflow run) and fix the patterns in `diagnose.yml` |
 

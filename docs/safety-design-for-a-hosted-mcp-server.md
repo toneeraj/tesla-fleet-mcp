@@ -6,7 +6,7 @@
 
 ## What the server is
 
-The server exposes four read-only tools over Tesla's official Fleet API: list vehicles, vehicle status, Supercharger history and API spend. It runs as one machine with one disk on Fly.io and is reachable over HTTPS by three clients: Claude Code, claude.ai (web and phone), and Meta's Muse agent. Every client signs in through the same gate, and only one process ever talks to Tesla.
+The server exposes four read-only tools over Tesla's official Fleet API: list vehicles, vehicle status, Supercharger history and API spend. It runs as one machine with one disk on Fly.io, asleep when idle and woken by the next request, and is reachable over HTTPS by three clients: Claude Code, claude.ai (web and phone), and Meta's Muse agent. Every client signs in through the same gate, and only one process ever talks to Tesla.
 
 The design problem is not the Tesla API. It is that one server is shared by callers with very different risk profiles. A person typing in Claude Code is supervised. Muse acts on its own around the clock and reads untrusted content such as email, so a malicious message could try to steer it into calling the server's tools. The design treats every caller as a possible source of misuse and makes the worst outcome of misuse small, bounded and visible.
 
