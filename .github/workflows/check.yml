@@ -50,6 +50,17 @@ jobs:
           if len(volumes) != 1:
               problems.append(f"{len(volumes)} volumes (expected 1)")
           print("::notice title=machines::" + (" | ".join(rows) or "none"))
+          for m in machines:
+              services = (m.get("config") or {}).get("services") or []
+              sleep = [f"autostop={sv.get('autostop')} autostart={sv.get('autostart')} min_running={sv.get('min_machines_running')}" for sv in services]
+              print("::notice title=sleep settings::" + ("; ".join(sleep) or "no services"))
+              events = sorted(m.get("events") or [], key=lambda e: e.get("timestamp", 0))[-6:]
+              lines = []
+              for e in events:
+                  ts = e.get("timestamp")
+                  when = __import__("datetime").datetime.utcfromtimestamp(ts / 1000).strftime("%H:%M UTC") if isinstance(ts, (int, float)) else str(ts)
+                  lines.append(f"{when} {e.get('type')} {e.get('status')} by {e.get('source')}")
+              print("::notice title=recent events::" + (" | ".join(lines) or "none"))
           print(f"::notice title=volumes::{len(volumes)} volume(s), " + ", ".join(f"{v.get('size_gb')}GB" for v in volumes))
           if problems:
               print("::error title=unexpected Fly shape::" + "; ".join(problems))
