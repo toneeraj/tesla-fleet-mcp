@@ -1,0 +1,58 @@
+# Daily spend guardrail: Fly has no spending cap, so check the shape of what is running.
+# Fails (and GitHub emails the repository owner) if the app has anything other than
+# exactly one shared-cpu-1x / 256 MB machine and one volume. Read-only.
+# Also run by hand to see whether the machine is asleep (stopped) or awake (started).
+name: Check
+
+on:
+  schedule:
+    - cron: "17 12 * * *"   # daily, 12:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      APP: tesla-fleet-mcp-toneeraj
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Load Fly token from 1Password
+        uses: 1password/load-secrets-action@v5
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          FLY_API_TOKEN: op://tesla-fleet/fly-api-token/password
+
+      - name: Machines and volumes match the expected shape
+        run: |
+          set -euo pipefail
+          flyctl machines list -a "$APP" --json > machines.json
+          flyctl volumes list -a "$APP" --json > volumes.json
+          python3 - <<'PY'
+          import json, sys
+          machines = json.load(open("machines.json"))
+          volumes = json.load(open("volumes.json"))
+          problems = []
+          rows = []
+          for m in machines:
+              guest = (m.get("config") or {}).get("guest") or {}
+              kind, cpus, mem = guest.get("cpu_kind"), guest.get("cpus"), guest.get("memory_mb")
+              rows.append(f"{m.get('id','?')[:8]} {m.get('state')} {m.get('region')} {kind}-{cpus}x {mem}MB")
+              if (kind, cpus, mem) != ("shared", 1, 256):
+                  problems.append(f"unexpected size {kind}-{cpus}x {mem}MB")
+          if len(machines) != 1:
+              problems.append(f"{len(machines)} machines (expected 1)")
+          if len(volumes) != 1:
+              problems.append(f"{len(volumes)} volumes (expected 1)")
+          print("::notice title=machines::" + (" | ".join(rows) or "none"))
+          print(f"::notice title=volumes::{len(volumes)} volume(s), " + ", ".join(f"{v.get('size_gb')}GB" for v in volumes))
+          if problems:
+              print("::error title=unexpected Fly shape::" + "; ".join(problems))
+              sys.exit(1)
+          print("::notice title=ok::exactly one small machine and one volume")
+          PY

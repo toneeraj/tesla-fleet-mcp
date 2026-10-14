@@ -57,6 +57,8 @@ To change a usage cap, set its environment variable in the `[env]` block of `fly
 
 **Verify:** Deploy and Diagnose are green on the scoped token; `get_api_spend` reports the caps under `today`.
 
+The **Check** workflow runs daily at 12:17 UTC. It fails, and GitHub emails the repository owner, if the app has anything other than exactly one shared-cpu-1x 256 MB machine and one volume. Run it by hand from **Actions → Check** to see whether the machine is asleep (`stopped`) or awake (`started`).
+
 ## Know what auto-sleep changes
 
 The machine stops after a few idle minutes and starts on the next request, so compute is billed only while it answers; the 1 GB volume is billed regardless. The first call after a quiet spell takes a few seconds longer. Daily caps, the ledger, the audit log and the Tesla login survive every sleep because they live on the volume; the per-minute rate limit resets because it lives in memory. To keep the machine always on, set `auto_stop_machines = "off"` and `min_machines_running = 1` in `fly.toml` and run **Deploy**.
