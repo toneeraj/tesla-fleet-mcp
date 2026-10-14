@@ -2,7 +2,7 @@
 
 Ask Claude about your Tesla. A read-only MCP server over Tesla's official Fleet API, built so an AI client can answer "what's my battery?" without ever being able to send a command to the car.
 
-**Status:** Phase 1 (read-only, local) live since 2026-10-12 against a real vehicle. Phase 2 (hosted, reachable from claude.ai and Muse) built and tested; deployment in progress.
+**Status:** Phase 3 complete. Hosted since 2026-10-14 and serving three clients against a real vehicle: Claude Code, claude.ai (web and phone) and Meta's Muse agent, each signed in through the same gate and named separately in the audit log.
 **Project page:** https://toneeraj.github.io/tesla-fleet-mcp/
 **Full design write-up:** https://claude.ai/code/artifact/91137cdf-1812-4e6a-8c5c-69acbea7a126
 
@@ -46,7 +46,7 @@ Hosting makes the server reachable from claude.ai (web and phone) and Muse. Each
 | Two copies of the Tesla login | Single owner | One machine, one volume. The laptop stops holding tokens. |
 | The host is compromised | Least secrets | The server holds only the Tesla client ID and tokens. The client secret and private key stay on the laptop. Revoke access from the Tesla account at any time. |
 
-**Secrets** live in a 1Password vault. GitHub holds exactly one secret, a 1Password service-account token that can only read that vault; the deploy workflow loads the rest by reference (`op://tesla-fleet/...`), masks them, and hands them to Fly. Deploy from the browser: **Actions → Deploy → Run workflow**.
+**Secrets** live in a 1Password vault. GitHub holds exactly one secret, a 1Password service-account token that can only read that vault; the deploy workflow loads the rest by reference (`op://tesla-fleet/...`), masks them, and hands them to Fly. Deploy from the browser: **Actions → Deploy → Run workflow**. Troubleshoot with **Actions → Diagnose**: a read-only report of registered clients, how far each sign-in got, and a sanitized audit summary (IPs, codes and tokens stripped, since this repository's Actions output is public).
 
 Caps are values, not logic: set `CAP_WAKES_PER_DAY`, `CAP_REQUESTS_PER_DAY`, `CAP_MONTHLY_CEILING_USD`, `CAP_LOCATION_PER_DAY`, `CAP_CALLS_PER_MINUTE` and `CAP_UNTRUSTED_WAKES_PER_DAY` to tune them.
 
@@ -122,9 +122,11 @@ Dockerfile, fly.toml   # hosted deployment: one machine, one volume
 
 ## Roadmap
 
-1. **Phase 1:** read-only, one client (Claude Code). *Live.*
-2. **Phase 2:** hosted server that owns the tokens and serves Claude Code, claude.ai and Muse behind the safety layers above. *Built and tested; deploying.*
-3. **Phase 3:** a few signed commands (lock, climate), each requiring confirmation, after virtual key pairing.
+Phases ran in order of need, not number: wanting the car from anywhere came before wanting to send it commands.
+
+1. **Phase 1:** read-only, one client (Claude Code on a laptop). *Done 2026-10-12.*
+2. **Phase 2:** a few signed commands (lock, climate), each requiring confirmation, after virtual key pairing. *Next, only if a command is actually wanted.*
+3. **Phase 3:** hosted server that owns the Tesla login and serves Claude Code, claude.ai and Muse behind the safety layers above. *Done 2026-10-14.*
 
 ## License
 
