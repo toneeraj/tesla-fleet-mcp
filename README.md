@@ -6,6 +6,8 @@ Ask Claude about your Tesla. A read-only MCP server over Tesla's official Fleet 
 **Project page:** https://toneeraj.github.io/tesla-fleet-mcp/
 **Full design write-up:** https://claude.ai/code/artifact/91137cdf-1812-4e6a-8c5c-69acbea7a126
 
+**Docs:** [Safety design for a hosted MCP server that several AI agents share](docs/safety-design-for-a-hosted-mcp-server.md) · [How to operate the hosted server](docs/how-to-operate-the-hosted-server.md)
+
 ![Architecture: every client meets the same gate; only the core talks to Tesla](docs/architecture.svg)
 
 ## What it does
@@ -40,7 +42,7 @@ Hosting makes the server reachable from claude.ai (web and phone) and Muse. Each
 | --- | --- | --- |
 | A stranger finds the URL | Auth gate | GitHub sign-in, then an allowlist. GitHub sign-in alone admits any GitHub user; the allowlist refuses every other account at the handshake, before it can list tools. |
 | An agent is steered by a malicious email or page | Read-only tools + caps | Nothing it can call changes the car. Caps are checked before a request is sent, so a refused call costs nothing. |
-| An agent loops | Rate limit + caps | 10 calls a minute per client; daily caps on wakes, requests and location reads; an $8 monthly spend ceiling under Tesla's $10 billing cap. |
+| An agent loops | Rate limit + caps | 10 calls a minute per client; daily caps on wakes, requests and location reads; an \$8 monthly spend ceiling under Tesla's \$10 billing cap. |
 | An autonomous client overspends wakes | Client naming | Each client is named by where its sign-in returns to. Claude Code and claude.ai are trusted; anything else, Muse included, gets 2 wakes a day instead of 5. |
 | Something goes wrong unnoticed | Audit log | One JSON line per call, cap refusal, refused account and rejected token. It records *that* location was read, never where the car was, and no car data at all. Kept 90 days. |
 | Two copies of the Tesla login | Single owner | One machine, one volume. The laptop stops holding tokens. |
@@ -116,7 +118,7 @@ tesla_fleet/
   register_partner.py  # one-time domain registration
   login.py             # one-time OAuth login with local callback
 tests/                 # pytest, mocked HTTP; no live Tesla calls
-docs/architecture.svg  # the diagram above
+docs/                  # architecture diagram, safety design, operations how-to
 Dockerfile, fly.toml   # hosted deployment: one machine, one volume
 ```
 
