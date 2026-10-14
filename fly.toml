@@ -1,7 +1,7 @@
 # One always-on machine with one volume: the single token owner.
 # Do not scale above one machine; two would each refresh the single-use Tesla token.
 app = "tesla-fleet-mcp-toneeraj"
-primary_region = "bos"
+primary_region = "iad"
 
 [build]
 

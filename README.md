@@ -46,6 +46,8 @@ Hosting makes the server reachable from claude.ai (web and phone) and Muse. Each
 | Two copies of the Tesla login | Single owner | One machine, one volume. The laptop stops holding tokens. |
 | The host is compromised | Least secrets | The server holds only the Tesla client ID and tokens. The client secret and private key stay on the laptop. Revoke access from the Tesla account at any time. |
 
+**Secrets** live in a 1Password vault. GitHub holds exactly one secret, a 1Password service-account token that can only read that vault; the deploy workflow loads the rest by reference (`op://tesla-fleet/...`), masks them, and hands them to Fly. Deploy from the browser: **Actions → Deploy → Run workflow**.
+
 Caps are values, not logic: set `CAP_WAKES_PER_DAY`, `CAP_REQUESTS_PER_DAY`, `CAP_MONTHLY_CEILING_USD`, `CAP_LOCATION_PER_DAY`, `CAP_CALLS_PER_MINUTE` and `CAP_UNTRUSTED_WAKES_PER_DAY` to tune them.
 
 ## Setup

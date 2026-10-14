@@ -1,6 +1,14 @@
 # Deploy the hosted server to Fly from the browser: Actions -> Deploy -> Run workflow.
-# Secrets live in GitHub (Settings -> Secrets and variables -> Actions) and go
-# straight to Fly; they never appear in logs or in this repository.
+# Secrets live in 1Password, vault "tesla-fleet". GitHub holds exactly one secret:
+# OP_SERVICE_ACCOUNT_TOKEN, a service account with read-only access to that vault.
+# Values go 1Password -> this run -> Fly; they are masked in logs and never in the repo.
+#
+# Vault "tesla-fleet", one Password item per value (the value in the password field):
+#   fly-api-token             Fly access token
+#   github-oauth-client-id    GitHub OAuth app client ID
+#   github-oauth-client-secret
+#   tesla-client-id           Tesla developer app client ID
+#   tesla-tokens-seed         one-time: contents of tokens.json; delete after first deploy
 name: Deploy
 
 on:
@@ -28,25 +36,31 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     env:
-      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       APP: tesla-fleet-mcp-toneeraj
-      REGION: bos
+      REGION: iad
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Check required secrets
+      - name: Load secrets from 1Password
+        uses: 1password/load-secrets-action@v5
+        with:
+          export-env: true
         env:
-          OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
-          OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
-          TESLA_CLIENT_ID: ${{ secrets.TESLA_CLIENT_ID }}
-        run: |
-          missing=""
-          [ -n "$FLY_API_TOKEN" ] || missing="$missing FLY_API_TOKEN"
-          [ -n "$OAUTH_CLIENT_ID" ] || missing="$missing OAUTH_CLIENT_ID"
-          [ -n "$OAUTH_CLIENT_SECRET" ] || missing="$missing OAUTH_CLIENT_SECRET"
-          [ -n "$TESLA_CLIENT_ID" ] || missing="$missing TESLA_CLIENT_ID"
-          if [ -n "$missing" ]; then echo "::error::Missing GitHub secrets:$missing"; exit 1; fi
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          FLY_API_TOKEN: op://tesla-fleet/fly-api-token/password
+          OAUTH_CLIENT_ID: op://tesla-fleet/github-oauth-client-id/password
+          OAUTH_CLIENT_SECRET: op://tesla-fleet/github-oauth-client-secret/password
+          TESLA_CLIENT_ID: op://tesla-fleet/tesla-client-id/password
+
+      - name: Load the one-time Tesla token seed, if present
+        uses: 1password/load-secrets-action@v5
+        continue-on-error: true
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          TESLA_TOKENS_JSON: op://tesla-fleet/tesla-tokens-seed/password
 
       - name: Create app and volume if missing
         run: |
@@ -60,11 +74,6 @@ jobs:
 
       - name: Stage secrets
         id: secrets
-        env:
-          OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
-          OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
-          TESLA_CLIENT_ID: ${{ secrets.TESLA_CLIENT_ID }}
-          TESLA_TOKENS_JSON: ${{ secrets.TESLA_TOKENS_JSON }}
         run: |
           set -euo pipefail
           args=(GITHUB_CLIENT_ID="$OAUTH_CLIENT_ID" GITHUB_CLIENT_SECRET="$OAUTH_CLIENT_SECRET" TESLA_CLIENT_ID="$TESLA_CLIENT_ID")
@@ -74,7 +83,7 @@ jobs:
           fi
           # One-time seed of the Tesla login. The server ignores it if it already holds tokens.
           seeded=false
-          if [ -n "$TESLA_TOKENS_JSON" ]; then
+          if [ -n "${TESLA_TOKENS_JSON:-}" ]; then
             args+=(TESLA_BOOTSTRAP_TOKENS="$TESLA_TOKENS_JSON")
             seeded=true
           fi
