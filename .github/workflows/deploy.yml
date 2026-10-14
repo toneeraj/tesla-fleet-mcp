@@ -65,10 +65,15 @@ jobs:
       - name: Create app and volume if missing
         run: |
           set -euo pipefail
-          if ! flyctl apps list --json | jq -e --arg a "$APP" '.[] | select((.Name // .name) == $a)' > /dev/null; then
+          # Works with an app-scoped deploy token: only this app is ever queried.
+          # Creating the app on a first deploy needs an organisation token.
+          if flyctl volumes list -a "$APP" --json > volumes.json 2>/dev/null; then
+            echo "App $APP exists."
+          else
             flyctl apps create "$APP"
+            echo '[]' > volumes.json
           fi
-          if ! flyctl volumes list -a "$APP" --json | jq -e 'length > 0' > /dev/null; then
+          if ! jq -e 'length > 0' volumes.json > /dev/null; then
             flyctl volumes create tesla_data -a "$APP" --region "$REGION" --size 1 --yes
           fi
 

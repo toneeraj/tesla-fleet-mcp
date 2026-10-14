@@ -44,12 +44,18 @@ All routine tasks run from a browser. Nothing below needs a local machine except
 
 Fly has no spending cap. Two controls bound the bill:
 
-1. Pay Fly with a virtual card number that has a monthly limit.
-2. Replace the organisation token in `fly-api-token` with a deploy token scoped to the app `tesla-fleet-mcp-toneeraj`, run **Deploy**, then revoke the organisation token.
+1. Pay Fly with a card number that has its own monthly limit. A card's spending limit for the account holder, or a per-purchase limit, does not cap a monthly bill.
+2. Scope the deploy token to this app:
+    1. Fly dashboard → app `tesla-fleet-mcp-toneeraj` → **Tokens** → create a deploy token with a one-year expiry.
+    2. Replace the value of `fly-api-token` in the `tesla-fleet` vault with it.
+    3. Run **Deploy**, then run **Diagnose**.
+    4. Revoke the organisation token in the Fly dashboard.
+
+    An app-scoped token cannot create the app, so a full rebuild from nothing needs an organisation token for that one run.
 
 To change a usage cap, set its environment variable in the `[env]` block of `fly.toml` and deploy: `CAP_WAKES_PER_DAY`, `CAP_REQUESTS_PER_DAY`, `CAP_MONTHLY_CEILING_USD`, `CAP_LOCATION_PER_DAY`, `CAP_CALLS_PER_MINUTE`, `CAP_UNTRUSTED_WAKES_PER_DAY`.
 
-**Verify:** `get_api_spend` reports the new caps under `today`.
+**Verify:** Deploy and Diagnose are green on the scoped token; `get_api_spend` reports the caps under `today`.
 
 ## Revoke all access in an emergency
 
