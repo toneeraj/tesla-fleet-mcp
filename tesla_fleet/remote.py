@@ -132,16 +132,32 @@ class CallGuard(Middleware):
         self._recent: dict[str, deque[float]] = defaultdict(deque)
         self._client_names: dict[str, str] = {}
 
-    async def client_name(self) -> str:
+    async def client_identity(self) -> tuple[str, str]:
+        """Return (name, ref): the audit name for the calling client and a non-secret reference.
+
+        Three ways a client can identify itself:
+          - a URL client_id (client ID metadata document, used by claude.ai): the URL's host IS the identity
+          - a self-registered client_id (dynamic registration, used by Muse): named by its redirect URIs
+          - no readable client_id: "unknown", which is treated as untrusted
+        """
         presented = _presented_token()
         client_id = _jwt_client_id(presented) if presented else None
         if not client_id:
-            return "unknown"
+            return "unknown", "no-client-id" if presented else "no-token"
+        if client_id.startswith("https://"):
+            return (urlparse(client_id).hostname or "unknown"), client_id
+        if self.auth is not None and client_id == getattr(self.auth, "_upstream_client_id", None):
+            # Sent the GitHub app's own ID instead of registering; the stand-in client the
+            # server synthesizes has a localhost redirect that must not read as Claude Code.
+            return "unknown", "upstream-client-id"
         if client_id not in self._client_names:
             info = await self.auth.get_client(client_id) if self.auth else None
             uris = [str(u) for u in (info.redirect_uris or [])] if info else []
             self._client_names[client_id] = classify_redirects(uris)
-        return self._client_names[client_id]
+        return self._client_names[client_id], client_id[:8]
+
+    async def client_name(self) -> str:
+        return (await self.client_identity())[0]
 
     def _rate_ok(self, client: str) -> bool:
         now = self.clock()
@@ -157,10 +173,11 @@ class CallGuard(Middleware):
         tool = context.message.name
         args = dict(context.message.arguments or {})
         token = get_access_token()
-        client = await self.client_name()
+        client, client_ref = await self.client_identity()
         base = {
             "github_login": token.claims.get("login") if token else None,
             "client": client,
+            "client_ref": client_ref,
             "tool": tool,
             "vin": mask_vin(args.get("vin")),
             "wake": args.get("wake"),

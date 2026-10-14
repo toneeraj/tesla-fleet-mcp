@@ -260,3 +260,35 @@ def test_client_named_from_presented_token_not_upstream_github_token(monkeypatch
     """Regression: the upstream GitHub token has no client_id; naming must use the client's own token."""
     monkeypatch.setattr(remote, "get_http_request", lambda: SimpleNamespace(headers={"authorization": "Bearer " + fake_token("toneeraj").token}))
     assert remote._jwt_client_id(remote._presented_token()) == "client-1"
+
+
+def test_url_client_id_is_named_by_its_host(tmp_path, monkeypatch):
+    """claude.ai identifies with a metadata-document URL instead of registering."""
+    import base64
+    payload = base64.urlsafe_b64encode(json.dumps({"client_id": "https://claude.ai/oauth/mcp-oauth-client-metadata"}).encode()).decode().rstrip("=")
+    server, audit, seen = guarded_server(tmp_path, monkeypatch, "toneeraj")
+    monkeypatch.setattr(remote, "_presented_token", lambda: f"h.{payload}.s")
+    call(server, "get_vehicle_status", {"vin": "VIN0001"})
+    assert seen["client"] == "claude.ai"
+    line = audit_lines(audit)[-1]
+    assert line["client"] == "claude.ai" and line["client_ref"].startswith("https://claude.ai/")
+
+
+def test_missing_client_id_is_untrusted_and_explained(tmp_path, monkeypatch):
+    server, audit, seen = guarded_server(tmp_path, monkeypatch, "toneeraj")
+    monkeypatch.setattr(remote, "_presented_token", lambda: "not-a-jwt")
+    call(server, "get_vehicle_status", {"vin": "VIN0001"})
+    assert seen["client"] == "unknown"
+    assert audit_lines(audit)[-1]["client_ref"] == "no-client-id"
+
+
+def test_upstream_client_id_is_not_mistaken_for_claude_code(tmp_path, monkeypatch):
+    import base64
+    payload = base64.urlsafe_b64encode(json.dumps({"client_id": "gh-app-id"}).encode()).decode().rstrip("=")
+    server, audit, seen = guarded_server(tmp_path, monkeypatch, "toneeraj", uris=("http://localhost",))
+    monkeypatch.setattr(remote, "_presented_token", lambda: f"h.{payload}.s")
+    guard = [m for m in server.middleware if isinstance(m, remote.CallGuard)][0]
+    guard.auth._upstream_client_id = "gh-app-id"
+    call(server, "get_vehicle_status", {"vin": "VIN0001"})
+    assert seen["client"] == "unknown"
+    assert audit_lines(audit)[-1]["client_ref"] == "upstream-client-id"

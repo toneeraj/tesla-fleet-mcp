@@ -118,7 +118,7 @@ def _audit(path: Path, last: int = 25) -> dict:
             lines.append(json.loads(raw))
         except ValueError:
             continue
-    keep = ("time", "event", "client", "tool", "outcome", "cap", "status", "reason", "github_login", "detail")
+    keep = ("time", "event", "client", "client_ref", "tool", "outcome", "cap", "status", "reason", "github_login", "detail")
     recent = [{k: v for k, v in line.items() if k in keep} for line in lines[-last:]]
     return {
         "present": True,
