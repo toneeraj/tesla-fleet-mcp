@@ -170,7 +170,8 @@ class FakeAuth:
 
 
 def guarded_server(tmp_path, monkeypatch, login, uris=("https://claude.ai/api/mcp/auth_callback",), limits=Limits()):
-    monkeypatch.setattr(remote, "get_access_token", lambda: fake_token(login))
+    monkeypatch.setattr(remote, "get_access_token", lambda: SimpleNamespace(token="gho_upstream_github_token", claims={"login": login}))
+    monkeypatch.setattr(remote, "_presented_token", lambda: fake_token(login).token)
     audit = remote.AuditLog(tmp_path / "audit.log")
     server = FastMCP("test")
     seen = {}
@@ -253,3 +254,9 @@ def test_unknown_client_is_named_by_host(tmp_path, monkeypatch):
     server, _, seen = guarded_server(tmp_path, monkeypatch, "toneeraj", uris=("https://connectors.muse.example/cb",))
     call(server, "get_vehicle_status", {"vin": "VIN0001"})
     assert seen["client"] == "connectors.muse.example"
+
+
+def test_client_named_from_presented_token_not_upstream_github_token(monkeypatch):
+    """Regression: the upstream GitHub token has no client_id; naming must use the client's own token."""
+    monkeypatch.setattr(remote, "get_http_request", lambda: SimpleNamespace(headers={"authorization": "Bearer " + fake_token("toneeraj").token}))
+    assert remote._jwt_client_id(remote._presented_token()) == "client-1"

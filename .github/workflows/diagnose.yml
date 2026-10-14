@@ -49,7 +49,7 @@ jobs:
           set -uo pipefail
           flyctl logs -a "$APP" --no-tail > logs.txt 2>/dev/null || true
           grep -E '/register|/authorize|/consent|/auth/callback|/token|invalid_|redirect_uri|code_verifier|ERROR|Traceback' logs.txt \
-            | sed -E 's/\?[^ "]*/?<q>/g; s/\b[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?\b/<ip>/g; s/[A-Za-z0-9_\-]{24,}/<redacted>/g' \
+            | sed -E 's/\x1b\[[0-9;]*m//g; s/\?[^ "]*/?<q>/g; s/\b[0-9]{1,3}(\.[0-9]{1,3}){3}(:[0-9]+)?\b/<ip>/g; s/[A-Za-z0-9_\-]{24,}/<redacted>/g' \
             | tail -40 > signin.txt
           echo "lines: $(wc -l < signin.txt)"
           python3 - <<'PY'

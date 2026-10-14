@@ -24,7 +24,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from fastmcp.exceptions import AuthorizationError, ToolError
-from fastmcp.server.dependencies import get_access_token
+from fastmcp.server.dependencies import get_access_token, get_http_request
 from fastmcp.server.middleware.middleware import CallNext, Middleware, MiddlewareContext
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -81,6 +81,23 @@ def classify_redirects(redirect_uris: list[str]) -> str:
     return named[0] if named else "unknown"
 
 
+def _presented_token() -> str | None:
+    """The bearer token the client actually sent.
+
+    Behind the OAuth proxy, get_access_token() returns the upstream GitHub token,
+    which says nothing about which MCP client is calling. The client's own
+    server-issued token, which carries client_id, is in the Authorization header.
+    """
+    try:
+        header = get_http_request().headers.get("authorization", "")
+    except RuntimeError:
+        header = ""
+    if header.lower().startswith("bearer "):
+        return header[7:].strip()
+    token = get_access_token()
+    return token.token if token else None
+
+
 def _jwt_client_id(token: str) -> str | None:
     try:
         payload = token.split(".")[1]
@@ -116,8 +133,8 @@ class CallGuard(Middleware):
         self._client_names: dict[str, str] = {}
 
     async def client_name(self) -> str:
-        token = get_access_token()
-        client_id = _jwt_client_id(token.token) if token else None
+        presented = _presented_token()
+        client_id = _jwt_client_id(presented) if presented else None
         if not client_id:
             return "unknown"
         if client_id not in self._client_names:
