@@ -133,6 +133,25 @@ def test_audit_prune_keeps_90_days(tmp_path):
     assert len(lines) == 1 and json.loads(lines[0])["time"] == new
 
 
+# ---- one-time token seeding --------------------------------------------------
+
+def test_seed_writes_once_and_never_overwrites(tmp_path, monkeypatch):
+    audit = remote.AuditLog(tmp_path / "audit.log")
+    path = tmp_path / "tokens.json"
+    monkeypatch.setenv("TESLA_BOOTSTRAP_TOKENS", json.dumps({"access_token": "a", "refresh_token": "first"}))
+    assert remote.seed_tokens_once(path, audit) is True
+    assert oct(path.stat().st_mode & 0o777) == "0o600"
+    monkeypatch.setenv("TESLA_BOOTSTRAP_TOKENS", json.dumps({"access_token": "b", "refresh_token": "stale"}))
+    assert remote.seed_tokens_once(path, audit) is False
+    assert json.loads(path.read_text())["refresh_token"] == "first"
+
+
+def test_seed_rejects_tokens_without_refresh(tmp_path, monkeypatch):
+    monkeypatch.setenv("TESLA_BOOTSTRAP_TOKENS", json.dumps({"access_token": "a"}))
+    with pytest.raises(SystemExit):
+        remote.seed_tokens_once(tmp_path / "tokens.json", remote.AuditLog(tmp_path / "audit.log"))
+
+
 # ---- middleware end to end, with a fake signed-in user -----------------------
 
 def fake_token(login, client_id="client-1"):

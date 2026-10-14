@@ -1,0 +1,97 @@
+# Deploy the hosted server to Fly from the browser: Actions -> Deploy -> Run workflow.
+# Secrets live in GitHub (Settings -> Secrets and variables -> Actions) and go
+# straight to Fly; they never appear in logs or in this repository.
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e '.[dev]'
+      - run: pytest -q
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      APP: tesla-fleet-mcp-toneeraj
+      REGION: bos
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Check required secrets
+        env:
+          OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
+          OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
+          TESLA_CLIENT_ID: ${{ secrets.TESLA_CLIENT_ID }}
+        run: |
+          missing=""
+          [ -n "$FLY_API_TOKEN" ] || missing="$missing FLY_API_TOKEN"
+          [ -n "$OAUTH_CLIENT_ID" ] || missing="$missing OAUTH_CLIENT_ID"
+          [ -n "$OAUTH_CLIENT_SECRET" ] || missing="$missing OAUTH_CLIENT_SECRET"
+          [ -n "$TESLA_CLIENT_ID" ] || missing="$missing TESLA_CLIENT_ID"
+          if [ -n "$missing" ]; then echo "::error::Missing GitHub secrets:$missing"; exit 1; fi
+
+      - name: Create app and volume if missing
+        run: |
+          set -euo pipefail
+          if ! fly apps list --json | jq -e --arg a "$APP" '.[] | select((.Name // .name) == $a)' > /dev/null; then
+            fly apps create "$APP"
+          fi
+          if ! fly volumes list -a "$APP" --json | jq -e 'length > 0' > /dev/null; then
+            fly volumes create tesla_data -a "$APP" --region "$REGION" --size 1 --yes
+          fi
+
+      - name: Stage secrets
+        id: secrets
+        env:
+          OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
+          OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
+          TESLA_CLIENT_ID: ${{ secrets.TESLA_CLIENT_ID }}
+          TESLA_TOKENS_JSON: ${{ secrets.TESLA_TOKENS_JSON }}
+        run: |
+          set -euo pipefail
+          args=(GITHUB_CLIENT_ID="$OAUTH_CLIENT_ID" GITHUB_CLIENT_SECRET="$OAUTH_CLIENT_SECRET" TESLA_CLIENT_ID="$TESLA_CLIENT_ID")
+          # The signing key is generated once on Fly and never leaves it.
+          if ! fly secrets list -a "$APP" --json | jq -e '.[] | select((.Name // .name) == "JWT_SIGNING_KEY")' > /dev/null; then
+            args+=(JWT_SIGNING_KEY="$(openssl rand -base64 48)")
+          fi
+          # One-time seed of the Tesla login. The server ignores it if it already holds tokens.
+          seeded=false
+          if [ -n "$TESLA_TOKENS_JSON" ]; then
+            args+=(TESLA_BOOTSTRAP_TOKENS="$TESLA_TOKENS_JSON")
+            seeded=true
+          fi
+          fly secrets set -a "$APP" --stage "${args[@]}" > /dev/null
+          echo "seeded=$seeded" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy
+        run: fly deploy -a "$APP" --remote-only --ha=false
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS "https://$APP.fly.dev/healthz"; then echo; exit 0; fi
+            sleep 6
+          done
+          echo "::error::Health check failed"; exit 1
+
+      - name: Remove the one-time token seed from Fly
+        if: steps.secrets.outputs.seeded == 'true'
+        run: fly secrets unset -a "$APP" TESLA_BOOTSTRAP_TOKENS > /dev/null

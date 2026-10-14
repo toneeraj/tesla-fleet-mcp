@@ -212,6 +212,26 @@ class RejectedAuthLogger:
         await self.app(scope, receive, watch)
 
 
+def seed_tokens_once(token_path: Path, audit: AuditLog) -> bool:
+    """Write the Tesla login from TESLA_BOOTSTRAP_TOKENS only if no token file exists yet.
+
+    Never overwrites: once the server owns a live token chain, a stale copy from
+    the environment must not replace it. Returns True if it seeded.
+    """
+    raw = os.environ.get("TESLA_BOOTSTRAP_TOKENS", "").strip()
+    if not raw or token_path.exists():
+        return False
+    tokens = json.loads(raw)
+    if not tokens.get("refresh_token"):
+        raise SystemExit("TESLA_BOOTSTRAP_TOKENS has no refresh_token.")
+    token_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(token_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        json.dump(tokens, handle)
+    audit.write("tokens_seeded")
+    return True
+
+
 def build_server():
     """Assemble the hosted server from environment variables. Fails fast if any are missing."""
     from fastmcp.server.auth.providers.github import GitHubProvider
@@ -226,6 +246,7 @@ def build_server():
     allowed = {login.strip() for login in os.environ["ALLOWED_GITHUB_LOGINS"].split(",") if login.strip()}
     audit = AuditLog(private_home() / "audit.log")
     audit.prune()
+    seed_tokens_once(private_home() / "tokens.json", audit)
     limits = Limits.from_env()
 
     auth = GitHubProvider(
